@@ -6,7 +6,7 @@
 
 const char* ssid = "YOUR_SSID"; // Replace with your Wi-Fi SSID
 const char* password = "YOUR_PASSWORD"; // Replace with your Wi-Fi password
-const char* apiKey = "ecd86479802bd43bcf5ffb5ba139750e"; // Replace with your OpenWeather API key
+const char* apiKey = "YOUR_API_KEY"; // Replace with your OpenWeather API key
 const char* city = "capetown "; // Replace with your desired city
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust the I2C address if needed
 
