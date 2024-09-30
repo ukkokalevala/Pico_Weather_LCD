@@ -1,0 +1,88 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFi.h>  // Include the Wi-Fi library for ESP32/ESP8266
+#include <HTTPClient.h>
+#include <ArduinoJson.h>  // Include ArduinoJson library
+
+const char* ssid = "YOUR_SSID"; // Replace with your Wi-Fi SSID
+const char* password = "YOUR_PASSWORD"; // Replace with your Wi-Fi password
+const char* apiKey = "ecd86479802bd43bcf5ffb5ba139750e"; // Replace with your OpenWeather API key
+const char* city = "capetown "; // Replace with your desired city
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust the I2C address if needed
+
+void setup() {
+    Wire1.setSDA(6);
+    Wire1.setSCL(7);
+    Wire.begin();
+    Serial.begin(115200);
+    lcd.begin(16, 02);
+    lcd.backlight();
+    
+    // Connect to Wi-Fi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+    }
+    Serial.println("Connected to WiFi");
+    
+    // Fetch weather data
+    fetchWeatherData();
+}
+
+void loop() {
+    // Refresh weather data every 60 seconds
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate > 60000) {
+        lastUpdate = millis();
+        fetchWeatherData();
+    }
+}
+
+void fetchWeatherData() {
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("Fetching weather data...");
+        HTTPClient http;
+
+        String cityEncoded = "Cape%20Town"; // Ensure spaces are encoded
+        String url = "http://api.openweathermap.org/data/2.5/weather?q=" + cityEncoded + "&appid=" + String(apiKey) + "&units=metric"; // Use &units=imperial for Fahrenheit
+        Serial.println("Requesting URL: " + url);  // Debug: Print the URL
+
+        
+        http.begin(url);
+        int httpResponseCode = http.GET();
+        
+        if (httpResponseCode > 0) {
+            String payload = http.getString();
+            Serial.println("Response payload: " + payload);
+            
+            // Parse the JSON response
+            DynamicJsonDocument doc(1024);
+            //deserializeJson(doc, payload);
+            DeserializationError error = deserializeJson(doc, payload);
+
+            if (error) {
+                Serial.print(F("deserializeJson() failed: "));
+                Serial.println(error.f_str());
+                return;
+            }
+            
+            const char* weather = doc["weather"][0]["description"]; // Weather description
+            float temperature = doc["main"]["temp"]; // Temperature
+            
+            // Display on LCD
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Cape Town: " + String(temperature) + "C");
+            lcd.setCursor(0, 1);
+            //lcd.print("Weather: ");
+            lcd.print(weather);  // Print the weather description
+        } else {
+            Serial.println("Error on HTTP request");
+            Serial.println(httpResponseCode);
+        }
+        http.end();
+    } else {
+        Serial.println("WiFi not connected");
+    }
+}
