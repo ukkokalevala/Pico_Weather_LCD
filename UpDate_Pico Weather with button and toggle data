@@ -1,0 +1,138 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+// === WiFi & API ===
+const char* ssid = "YOUR_SSID"; // NETWORK USER NAME 
+const char* password = "YOUR_PASSWORD"; // PASSWORD
+const char* apiKey = "API_KEY"; // ENTER HERE YOUR OPENWEATHER API KEY https://openweathermap.org
+const char* city = "Cape Town";
+
+// === LCD ===
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Adjust address if needed
+
+// === Button ===
+#define BUTTON_PIN 15
+int currentPage = 0;
+unsigned long lastDebounce = 0;
+
+// === Weather data ===
+String weatherDesc;
+float temp, feelsLike, pressure, windSpeed;
+int humidity;
+
+void setup() {
+  Wire.begin();  // Default SDA: 4, SCL: 5 on Pico W
+  Serial.begin(115200);
+  lcd.begin(16, 2);
+  lcd.backlight();
+
+  pinMode(BUTTON_PIN, INPUT_PULLDOWN);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+  fetchWeatherData();
+}
+
+void loop() {
+  static bool lastButtonState = LOW;
+  bool currentButtonState = digitalRead(BUTTON_PIN);
+
+  // Detect rising edge (LOW → HIGH)
+  if (currentButtonState == HIGH && lastButtonState == LOW && millis() - lastDebounce > 300) {
+    lastDebounce = millis();
+    currentPage = (currentPage + 1) % 3;
+    updateLCD();
+  }
+
+  lastButtonState = currentButtonState;
+
+  // Refresh data every 60s
+  static unsigned long lastUpdate = 0;
+  if (millis() - lastUpdate > 60000) {
+    lastUpdate = millis();
+    fetchWeatherData();
+  }
+}
+
+
+void fetchWeatherData() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String url = "http://api.openweathermap.org/data/2.5/weather?q=Cape%20Town&appid=" + String(apiKey) + "&units=metric";
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+      String payload = http.getString();
+      Serial.println("Response payload: " + payload);
+
+      DynamicJsonDocument doc(1024);
+      DeserializationError error = deserializeJson(doc, payload);
+      if (error) {
+        Serial.print("deserializeJson() failed: ");
+        Serial.println(error.f_str());
+        return;
+      }
+
+      // Extract data
+      weatherDesc = doc["weather"][0]["description"].as<String>();
+      temp = doc["main"]["temp"];
+      feelsLike = doc["main"]["feels_like"];
+      humidity = doc["main"]["humidity"];
+      pressure = doc["main"]["pressure"];
+      windSpeed = doc["wind"]["speed"];
+
+      updateLCD();  // Refresh LCD
+    } else {
+      Serial.print("HTTP error: ");
+      Serial.println(httpCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi not connected.");
+  }
+}
+
+void updateLCD() {
+  lcd.clear();
+  switch (currentPage) {
+    case 0:
+      lcd.setCursor(0, 0);
+      lcd.print("Cape Town:");
+      lcd.setCursor(0, 1);
+      lcd.print(temp, 1);
+      lcd.print("C ");
+      lcd.print(weatherDesc);
+      break;
+
+    case 1:
+      lcd.setCursor(0, 0);
+      lcd.print("Feels: ");
+      lcd.print(feelsLike, 1);
+      lcd.print("C");
+      lcd.setCursor(0, 1);
+      lcd.print("Humidity: ");
+      lcd.print(humidity);
+      lcd.print("%");
+      break;
+
+    case 2:
+      lcd.setCursor(0, 0);
+      lcd.print("Wind: ");
+      lcd.print(windSpeed, 1);
+      lcd.print("m/s");
+      lcd.setCursor(0, 1);
+      lcd.print("Pressure:");
+      lcd.print(pressure, 0);
+      lcd.print("hPa");
+      break;
+  }
+}
