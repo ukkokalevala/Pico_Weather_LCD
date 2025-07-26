@@ -11,9 +11,7 @@ const char* city = "capetown "; // Replace with your desired city
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust the I2C address if needed
 
 void setup() {
-    Wire1.setSDA(6);
-    Wire1.setSCL(7);
-    Wire.begin();
+    Wire.begin(); // Default GPIO 4 and 5 
     Serial.begin(115200);
     lcd.begin(16, 02);
     lcd.backlight();
